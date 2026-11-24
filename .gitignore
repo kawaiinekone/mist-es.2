@@ -1,0 +1,85 @@
+# simulation artifacts
+sim/
+programs/build/*.hex
+programs/build/*.bin
+programs/build/*.elf
+*.vcd
+*.out
+*.vvp
+
+# yosys / synthesis logs
+yosys*.log
+*.json
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# docs build
+site/
+.cache/
+
+# Legacy flat documentation files (superseded by structured docs subdirectories)
+docs/architecture.md
+docs/benchmarks.md
+docs/bus-integration.md
+docs/csrs.md
+docs/debug.md
+docs/fpga.md
+docs/isa.md
+docs/memory-map.md
+docs/privilege-and-security.md
+docs/traps-and-interrupts.md
+docs/verification.md
+
+# editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+#Python Virtual Environment
+venv/
+
+# Arty Build
+fpga/arty_a7/build*
+fpga/arty_a7/vivado*
+
+# Vivado logs & backups everywhere
+vivado*.log
+vivado*.jou
+*.backup.log
+*.backup.jou
+.Xil/
+
+# Software & HIL build outputs
+sw/hil_build/
+sw/fpga_hello.bin
+sw/fpga_hello.elf
+sw/vivado*
+*.rpt
+
+# Bench build outputs
+bench/build/
+bench/results/
+bench/*.fst*
+bench/*.log
+bench/.venv/
+bench/venv/
+
+# Verification toolchains and tools
+
+# dhrystone build
+dhrystone/build/
+
+# firmware
+sw/firmware.mem
+
+# test benchmarks
+benchmarks/coremark_sim.log
+
+# test runner outputs (run_tests.sh, run_isa.sh)
+/build/
+third_party/riscv-arch-test/
