@@ -485,11 +485,6 @@ module mist_es_core
           if      (ebreak_to_debug) begin       // EBREAK with dcsr.ebreakm
             dpc <= pc; dcsr_cause <= 3'd1; dbg_mode <= 1'b1; state <= S_HALTED;
           end
-          else if (sec_wipe_req) begin
-            state <= S_WIPE;
-            wipe_cnt <= 5'd1;
-            pc <= next_pc;
-          end
           else if (d_mem_re && !ex_trap)        state <= S_LOAD;
           else if (d_is_md  && !ex_trap)        state <= S_MD;
           else if (d_mem_we && !ex_trap && mis) begin

@@ -42,26 +42,24 @@ module mist_es_pmp #(
   reg            sel_allow;
 
   // Smepmp truth table with MML=1: {L,R,W,X} -> {M r,w,x, U r,w,x}
-  function automatic logic [5:0] mml_perm(input logic [3:0] lrwx);
-    unique case (lrwx)
-      4'b0000: mml_perm = 6'b000_000;   // inaccessible
-      4'b0001: mml_perm = 6'b000_001;   // U execute-only
-      4'b0010: mml_perm = 6'b110_100;   // shared data: M RW, U R
-      4'b0011: mml_perm = 6'b110_110;   // shared data: M RW, U RW
-      4'b0100: mml_perm = 6'b000_100;   // U read-only
-      4'b0101: mml_perm = 6'b000_101;   // U read/execute
-      4'b0110: mml_perm = 6'b000_110;   // U read/write
-      4'b0111: mml_perm = 6'b000_111;   // U read/write/execute
-      4'b1000: mml_perm = 6'b000_000;   // locked inaccessible
-      4'b1001: mml_perm = 6'b001_000;   // M execute-only
-      4'b1010: mml_perm = 6'b001_001;   // locked shared code: M X, U X
-      4'b1011: mml_perm = 6'b101_001;   // locked shared code: M RX, U X
-      4'b1100: mml_perm = 6'b100_000;   // M read-only
-      4'b1101: mml_perm = 6'b101_000;   // M read/execute
-      4'b1110: mml_perm = 6'b110_000;   // M read/write
-      4'b1111: mml_perm = 6'b100_100;   // locked shared data: M R, U R
-    endcase
-  endfunction
+  localparam [16*6-1:0] MML_TABLE = {
+    6'b100_100, // 15: 1111: locked shared data: M R, U R
+    6'b110_000, // 14: 1110: M read/write
+    6'b101_000, // 13: 1101: M read/execute
+    6'b100_000, // 12: 1100: M read-only
+    6'b101_001, // 11: 1011: locked shared code: M RX, U X
+    6'b001_001, // 10: 1010: locked shared code: M X, U X
+    6'b001_000, // 9:  1001: M execute-only
+    6'b000_000, // 8:  1000: locked inaccessible
+    6'b000_111, // 7:  0111: U read/write/execute
+    6'b000_110, // 6:  0110: U read/write
+    6'b000_101, // 5:  0101: U read/execute
+    6'b000_100, // 4:  0100: U read-only
+    6'b110_110, // 3:  0011: shared data: M RW, U RW
+    6'b110_100, // 2:  0010: shared data: M RW, U R
+    6'b000_001, // 1:  0001: U execute-only
+    6'b000_000  // 0:  0000: inaccessible
+  };
 
   always_comb begin
     /* verilator lint_off UNUSED */
@@ -78,14 +76,14 @@ module mist_es_pmp #(
       pa      = addrreg[i*32 +: 32];
       pa_prev = (i == 0) ? 32'd0 : addrreg[(i-1)*32 +: 32];
       m       = pa ^ (pa + 32'd1);            // NAPOT size mask (low run of 1s)
-      unique case (A)
+      case (A)
         2'd0: match[i] = 1'b0;                              // OFF
         2'd1: match[i] = (aw >= pa_prev) && (aw < pa);      // TOR
         2'd2: match[i] = (aw == pa);                        // NA4
         2'd3: match[i] = ((aw & ~m) == (pa & ~m));          // NAPOT
       endcase
       perm     = (do_x & X) | (do_r & R) | (do_w & W);
-      mp       = mml_perm({L, R, W, X});
+      mp       = MML_TABLE[{L, R, W, X}*6 +: 6];
       rwx      = priv_m ? mp[5:3] : mp[2:0];
       if (mml)
         allow[i] = (do_r & rwx[2]) | (do_w & rwx[1]) | (do_x & rwx[0]);

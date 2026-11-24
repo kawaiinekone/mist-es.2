@@ -136,6 +136,17 @@ static void scan_ir(Vbench_top* top, uint8_t irval) {
     tck_cycle(top, 1, 0); tck_cycle(top, 0, 0);
 }
 
+static void scan_ir_pause(Vbench_top* top, uint8_t irval) {
+    tck_cycle(top, 1, 0); tck_cycle(top, 1, 0); tck_cycle(top, 0, 0); tck_cycle(top, 0, 0);
+    for (int k = 0; k < 5; k++) {
+        tck_cycle(top, (k == 4) ? 1 : 0, (irval >> k) & 1);
+    }
+    tck_cycle(top, 0, 0); // Pause-IR
+    tck_cycle(top, 1, 0); // Exit2-IR
+    tck_cycle(top, 1, 0); // Update-IR
+    tck_cycle(top, 0, 0); // RTI
+}
+
 static uint64_t scan_dr(Vbench_top* top, int n, uint64_t din) {
     tck_cycle(top, 1, 0); tck_cycle(top, 0, 0); tck_cycle(top, 0, 0);
     uint64_t dout = 0;
@@ -144,6 +155,20 @@ static uint64_t scan_dr(Vbench_top* top, int n, uint64_t din) {
         tck_cycle(top, (k == n - 1) ? 1 : 0, (din >> k) & 1);
     }
     tck_cycle(top, 1, 0); tck_cycle(top, 0, 0);
+    return dout;
+}
+
+static uint64_t scan_dr_pause(Vbench_top* top, int n, uint64_t din) {
+    tck_cycle(top, 1, 0); tck_cycle(top, 0, 0); tck_cycle(top, 0, 0);
+    uint64_t dout = 0;
+    for (int k = 0; k < n; k++) {
+        if (top->tdo) dout |= (1ULL << k);
+        tck_cycle(top, (k == n - 1) ? 1 : 0, (din >> k) & 1);
+    }
+    tck_cycle(top, 0, 0); // Pause-DR
+    tck_cycle(top, 1, 0); // Exit2-DR
+    tck_cycle(top, 1, 0); // Update-DR
+    tck_cycle(top, 0, 0); // RTI
     return dout;
 }
 
@@ -159,33 +184,158 @@ static uint32_t dmi_read(Vbench_top* top, uint8_t addr) {
     return (uint32_t)(res >> 2);
 }
 
+static void jtag_full_tap_walk(Vbench_top* top) {
+    for (int i = 0; i < 6; i++) tck_cycle(top, 1, 0);
+    tck_cycle(top, 0, 0); // RTI
+    tck_cycle(top, 0, 0); // stay RTI
+    tck_cycle(top, 1, 0); // SEL_DR
+    tck_cycle(top, 0, 0); // CAP_DR
+    tck_cycle(top, 0, 0); // SHF_DR
+    tck_cycle(top, 0, 0); // stay SHF_DR
+    tck_cycle(top, 1, 0); // EX1_DR
+    tck_cycle(top, 0, 0); // PAU_DR
+    tck_cycle(top, 0, 0); // stay PAU_DR
+    tck_cycle(top, 1, 0); // EX2_DR
+    tck_cycle(top, 0, 0); // loop to SHF_DR
+    tck_cycle(top, 1, 0); // EX1_DR
+    tck_cycle(top, 1, 0); // UPD_DR
+    tck_cycle(top, 1, 0); // loop to SEL_DR
+    tck_cycle(top, 1, 0); // SEL_IR
+    tck_cycle(top, 0, 0); // CAP_IR
+    tck_cycle(top, 0, 0); // SHF_IR
+    tck_cycle(top, 0, 0); // stay SHF_IR
+    tck_cycle(top, 1, 0); // EX1_IR
+    tck_cycle(top, 0, 0); // PAU_IR
+    tck_cycle(top, 0, 0); // stay PAU_IR
+    tck_cycle(top, 1, 0); // EX2_IR
+    tck_cycle(top, 0, 0); // loop to SHF_IR
+    tck_cycle(top, 1, 0); // EX1_IR
+    tck_cycle(top, 1, 0); // UPD_IR
+    tck_cycle(top, 1, 0); // loop to SEL_DR
+    tck_cycle(top, 1, 0); // SEL_IR
+    tck_cycle(top, 1, 0); // TLR
+    tck_cycle(top, 0, 0); // RTI
+}
+
 static void run_jtag_test(Vbench_top* top) {
     fprintf(stderr, "[BENCH] Executing JTAG Debug Module stimulus...\n");
     jtag_reset(top);
+    jtag_full_tap_walk(top);
     scan_dr(top, 32, 0);
-    scan_ir(top, 0x10);
-    scan_dr(top, 32, 0); // DTMCS
-    scan_ir(top, 0x11);  // DMI
+    scan_ir_pause(top, 0x10);
+    scan_dr_pause(top, 32, 0); // DTMCS with pause
+    scan_ir(top, 0x1F);        // BYPASS
+    scan_dr(top, 8, 0xAA);     // Shift through bypass
+    scan_ir(top, 0x11);        // DMI
     dmi_write(top, 0x10, 0x00000001);
     dmi_write(top, 0x10, 0x80000001);
-    for (int i = 0; i < 20; i++) { clock_step(top); clock_step(top); }
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_read(top, 0x10);
     dmi_read(top, 0x11);
+    dmi_read(top, 0x12);
+    dmi_read(top, 0x16);
+    dmi_read(top, 0x17);
+    dmi_read(top, 0x38);
+    dmi_read(top, 0x39);
+    dmi_read(top, 0x3C);
     dmi_write(top, 0x04, 0xA5A5A5A5);
     dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (1 << 16) | 0x101F);
-    for (int i = 0; i < 20; i++) { clock_step(top); clock_step(top); }
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
     dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (0 << 16) | 0x101F);
-    for (int i = 0; i < 20; i++) { clock_step(top); clock_step(top); }
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
     dmi_read(top, 0x04);
     dmi_write(top, 0x17, (2 << 20) | (1 << 17) | 0x301);
-    for (int i = 0; i < 20; i++) { clock_step(top); clock_step(top); }
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
     dmi_read(top, 0x04);
-    dmi_write(top, 0x39, 0x80000100);
-    dmi_write(top, 0x3C, 0x12345678);
-    dmi_write(top, 0x38, (1 << 20) | (2 << 17));
+
+    // SBA write with auto-increment
+    dmi_write(top, 0x39, 0x80000200);
+    dmi_write(top, 0x38, (1 << 20) | (1 << 16) | (2 << 17));
+    dmi_write(top, 0x3C, 0x11223344);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+
+    // SBA read with auto-increment & sbreadondata
+    dmi_write(top, 0x38, (1 << 20) | (1 << 16) | (1 << 15) | (2 << 17));
+    dmi_read(top, 0x3C);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+
+    // Unsupported abstract command (triggers cmderr=2)
+    dmi_write(top, 0x17, (1 << 24));
     for (int i = 0; i < 20; i++) { clock_step(top); clock_step(top); }
-    dmi_write(top, 0x10, 0x40000001);
-    for (int i = 0; i < 20; i++) { clock_step(top); clock_step(top); }
+    dmi_read(top, 0x16);
+    dmi_write(top, 0x16, 0x00000700); // clear cmderr
+
+    // dmactive toggle and ackhavereset
+    dmi_write(top, 0x10, 0x10000001); // ackhavereset
+    dmi_write(top, 0x10, 0x00000000); // dmactive=0
+    dmi_write(top, 0x10, 0x00000001); // dmactive=1
+
+    // CSR local debug accesses (dcsr=0x7b0, dpc=0x7b1, dscratch0=0x7b2)
+    dmi_write(top, 0x04, 0x00008004); // ebreakm=1, step=1
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (1 << 16) | 0x7b0);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_write(top, 0x04, 0x00000020);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (1 << 16) | 0x7b1);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_write(top, 0x04, 0xCAFEBABE);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (1 << 16) | 0x7b2);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (0 << 16) | 0x7b0);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_read(top, 0x04);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (0 << 16) | 0x7b1);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_read(top, 0x04);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (0 << 16) | 0x7b2);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_read(top, 0x04);
+
+    // Shared CSR file access via Abstract Command (exercises mist_es_core dbg_csr_we & default branch)
+    dmi_write(top, 0x04, 0x12345678);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (1 << 16) | 0x340);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | (0 << 16) | 0x340);
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+    dmi_read(top, 0x04);
+
+    // Single step
+    dmi_write(top, 0x10, 0x40000001); // resumereq
+    for (int i = 0; i < 60; i++) { clock_step(top); clock_step(top); }
+
     fprintf(stderr, "[BENCH] JTAG Debug Module stimulus completed.\n");
+}
+
+static void run_security_test(Vbench_top* top) {
+    fprintf(stderr, "[BENCH] Executing Security & Fault-Tolerance stimulus...\n");
+    jtag_reset(top);
+    scan_ir(top, 0x11);
+    dmi_write(top, 0x10, 0x80000001); // halt hart
+    for (int i = 0; i < 30; i++) clock_step(top);
+
+    // 1. Single-bit ECC injection on reg 5 (index 4 in regs[1:31])
+    top->rootp->bench_top__DOT__u_core__DOT__g_rf_ecc__DOT__u_rf__DOT__regs[4] ^= (1ULL << 12);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | 0x1005); // Read GPR x5
+    for (int i = 0; i < 40; i++) { clock_step(top); clock_step(top); }
+    top->rootp->bench_top__DOT__u_core__DOT__g_rf_ecc__DOT__u_rf__DOT__regs[4] ^= (1ULL << 12); // restore
+
+    // 2. Double-bit ECC injection on reg 6 (index 5 in regs[1:31])
+    top->rootp->bench_top__DOT__u_core__DOT__g_rf_ecc__DOT__u_rf__DOT__regs[5] ^= (1ULL << 4) | (1ULL << 8);
+    dmi_write(top, 0x17, (2 << 20) | (1 << 17) | 0x1006); // Read GPR x6
+    for (int i = 0; i < 40; i++) { clock_step(top); clock_step(top); }
+    top->rootp->bench_top__DOT__u_core__DOT__g_rf_ecc__DOT__u_rf__DOT__regs[5] ^= (1ULL << 4) | (1ULL << 8); // restore
+
+    // 3. FSM Glitch injection
+    top->rootp->bench_top__DOT__u_core__DOT__state = 15;
+    for (int i = 0; i < 30; i++) { clock_step(top); clock_step(top); }
+
+    // 4. Exercise S_EXEC pipeline double-bit ECC fault detection & telemetry
+    top->rootp->bench_top__DOT__u_core__DOT__g_rf_ecc__DOT__u_rf__DOT__regs[5] ^= (1ULL << 4) | (1ULL << 8);
+    top->rootp->bench_top__DOT__u_core__DOT__instr = 0x00030293; // addi x5, x6, 0 (reads x6)
+    top->rootp->bench_top__DOT__u_core__DOT__state = 2; // S_EXEC
+    for (int i = 0; i < 10; i++) { clock_step(top); clock_step(top); }
+    top->rootp->bench_top__DOT__u_core__DOT__g_rf_ecc__DOT__u_rf__DOT__regs[5] ^= (1ULL << 4) | (1ULL << 8); // restore
+
+    fprintf(stderr, "[BENCH] Security stimulus completed.\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +349,7 @@ int main(int argc, char* argv[])
     uint64_t    iterations = 1000;
     bool        do_trace   = false;
     bool        do_jtag    = false;
+    bool        do_sec_fault = false;
 
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--hex")  && i+1 < argc) { hex_path   = argv[++i]; }
@@ -212,6 +363,7 @@ int main(int argc, char* argv[])
         }
         else if (!strcmp(argv[i], "--trace")) { do_trace = true; }
         else if (!strcmp(argv[i], "--jtag"))  { do_jtag = true; }
+        else if (!strcmp(argv[i], "--sec-fault")) { do_sec_fault = true; }
     }
 
     if (!hex_path) {
@@ -247,6 +399,14 @@ int main(int argc, char* argv[])
 
     // ---- reset sequence (8 half-cycles = 4 full clocks) ------------------
     top->tck = 0; top->tms = 0; top->tdi = 0;
+    uint64_t    sim_cycles   = 0;
+    uint64_t    bench_cycles = 0;   // cycle count reported by firmware
+    uint64_t    cy_hi        = 0;   // upper 30 bits (side-channel)
+    uint64_t    cy_lo        = 0;   // lower 30 bits (side-channel)
+    bool        got_hi       = false;
+    bool        got_lo       = false;
+    int         exit_code    = 2;   // default: TIMEOUT
+
     top->rst = 1;
     top->clk = 0;
     for (int h = 0; h < 8; h++) {
@@ -258,16 +418,18 @@ int main(int argc, char* argv[])
         main_time++;
     }
     top->rst = 0;
-    if (do_jtag) run_jtag_test(top);
+    if (do_jtag) {
+        run_jtag_test(top);
+        exit_code = 0;
+        goto sim_done;
+    }
+    if (do_sec_fault) {
+        run_security_test(top);
+        exit_code = 0;
+        goto sim_done;
+    }
 
     // ---- simulation loop --------------------------------------------------
-    uint64_t    sim_cycles   = 0;
-    uint64_t    bench_cycles = 0;   // cycle count reported by firmware
-    uint64_t    cy_hi        = 0;   // upper 30 bits (side-channel)
-    uint64_t    cy_lo        = 0;   // lower 30 bits (side-channel)
-    bool        got_hi       = false;
-    bool        got_lo       = false;
-    int         exit_code    = 2;   // default: TIMEOUT
 
     while (!Verilated::gotFinish() && sim_cycles < max_cycles) {
         top->clk ^= 1;
@@ -316,6 +478,7 @@ int main(int argc, char* argv[])
         }
     }
 
+sim_done:
     // ---- report -----------------------------------------------------------
     if (sim_cycles >= max_cycles && exit_code == 2) {
         fprintf(stderr, "[BENCH] TIMEOUT after %" PRIu64 " cycles\n", max_cycles);

@@ -17,7 +17,9 @@
 module mist_es_regfile_ecc
   import mist_es_pkg::*;
 #(
+  /* verilator lint_off UNUSEDPARAM */
   parameter bit WRITE_FIRST = 1
+  /* verilator lint_on UNUSEDPARAM */
 )(
   input  logic              clk,
   input  logic [4:0]        ra1,
@@ -70,21 +72,18 @@ module mist_es_regfile_ecc
   integer ri;
   initial for (ri = 1; ri < 32; ri = ri + 1) regs[ri] = {enc(32'b0), 32'b0};
 
-  wire fwd1 = WRITE_FIRST && we && (wa != 5'd0) && (wa == ra1);
-  wire fwd2 = WRITE_FIRST && we && (wa != 5'd0) && (wa == ra2);
-
   wire [33:0] d1 = dec(regs[ra1][38:32], regs[ra1][31:0]);
   wire [33:0] d2 = dec(regs[ra2][38:32], regs[ra2][31:0]);
 
-  assign rd1 = (ra1 == 5'd0) ? '0 : fwd1 ? wd : d1[31:0];
-  assign rd2 = (ra2 == 5'd0) ? '0 : fwd2 ? wd : d2[31:0];
-  // report errors on architecturally-visible reads (non-x0, non-forwarded)
-  assign ecc_cerr = ((ra1 != 5'd0) && !fwd1 && d1[32]) ||
-                    ((ra2 != 5'd0) && !fwd2 && d2[32]);
-  assign ecc_uerr = ((ra1 != 5'd0) && !fwd1 && d1[33]) ||
-                    ((ra2 != 5'd0) && !fwd2 && d2[33]);
-  assign ecc_fault_reg = ((ra1 != 5'd0) && !fwd1 && (d1[32] || d1[33])) ? ra1 :
-                         ((ra2 != 5'd0) && !fwd2 && (d2[32] || d2[33])) ? ra2 : 5'd0;
+  assign rd1 = (ra1 == 5'd0) ? '0 : d1[31:0];
+  assign rd2 = (ra2 == 5'd0) ? '0 : d2[31:0];
+  // report errors on architecturally-visible reads (non-x0)
+  assign ecc_cerr = ((ra1 != 5'd0) && d1[32]) ||
+                    ((ra2 != 5'd0) && d2[32]);
+  assign ecc_uerr = ((ra1 != 5'd0) && d1[33]) ||
+                    ((ra2 != 5'd0) && d2[33]);
+  assign ecc_fault_reg = ((ra1 != 5'd0) && (d1[32] || d1[33])) ? ra1 :
+                         ((ra2 != 5'd0) && (d2[32] || d2[33])) ? ra2 : 5'd0;
 
   always_ff @(posedge clk)
     if (we && (wa != 5'd0)) regs[wa] <= {enc(wd), wd};

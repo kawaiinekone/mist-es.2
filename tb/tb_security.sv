@@ -125,8 +125,8 @@ module tb_security;
 
     // Trigger secure wipe sequence
     force dut.u_core.u_csr.wipe_pulse = 1'b1;
-    #1;
     @(posedge clk);
+    while (dut.u_core.state != 4'd8) @(posedge clk);
     release dut.u_core.u_csr.wipe_pulse;
 
     // Wait 40 cycles for 31-cycle wipe sequence to complete
