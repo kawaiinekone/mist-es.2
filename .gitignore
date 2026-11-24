@@ -1,5 +1,6 @@
 # simulation artifacts
 sim/
+obj_dir/
 programs/build/*.hex
 programs/build/*.bin
 programs/build/*.elf
