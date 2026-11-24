@@ -51,7 +51,8 @@ module mist_es_axil_master
     .retire_rd_we(rwe), .retire_rd(rrd), .retire_rd_val(rval),
     .dbg_haltreq(1'b0), .dbg_resumereq(1'b0), .dbg_halted(),
     .dbg_ar_valid(1'b0), .dbg_ar_write(1'b0), .dbg_ar_csr(1'b0),
-    .dbg_ar_regno(12'd0), .dbg_ar_wdata(32'd0), .dbg_ar_rdata(), .dbg_ar_done() );
+    .dbg_ar_regno(12'd0), .dbg_ar_wdata(32'd0), .dbg_ar_rdata(), .dbg_ar_done(),
+    .alert_major_o(), .alert_minor_o() );
   /* verilator lint_on PINCONNECTEMPTY */
 
   wire is_data  = dmem_re | dmem_we;

@@ -28,7 +28,8 @@ module mist_es_regfile_ecc
   input  logic [4:0]        wa,
   input  logic [XLEN-1:0]   wd,
   output logic              ecc_cerr,   // single-bit error corrected (this read)
-  output logic              ecc_uerr    // double-bit error detected (uncorrectable)
+  output logic              ecc_uerr,   // double-bit error detected (uncorrectable)
+  output logic [4:0]        ecc_fault_reg // address of register with ECC error
 );
   // per-data-bit Hamming column codes: 32 distinct nonzero non-power-of-2 6-bit values
   function automatic logic [5:0] hcol(input integer j);
@@ -82,6 +83,8 @@ module mist_es_regfile_ecc
                     ((ra2 != 5'd0) && !fwd2 && d2[32]);
   assign ecc_uerr = ((ra1 != 5'd0) && !fwd1 && d1[33]) ||
                     ((ra2 != 5'd0) && !fwd2 && d2[33]);
+  assign ecc_fault_reg = ((ra1 != 5'd0) && !fwd1 && (d1[32] || d1[33])) ? ra1 :
+                         ((ra2 != 5'd0) && !fwd2 && (d2[32] || d2[33])) ? ra2 : 5'd0;
 
   always_ff @(posedge clk)
     if (we && (wa != 5'd0)) regs[wa] <= {enc(wd), wd};

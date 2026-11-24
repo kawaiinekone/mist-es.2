@@ -54,7 +54,18 @@ module mist_es_csr
   output logic [XLEN-1:0]   mtvec_o,
   output logic [XLEN-1:0]   mepc_o,
   output logic              irq_req,    // an enabled interrupt is pending+taken
-  output logic [3:0]        irq_cause   // its cause code (11 ext / 7 timer / 3 soft)
+  output logic [3:0]        irq_cause,  // its cause code (11 ext / 7 timer / 3 soft)
+
+  // Security & Fault-Tolerance interface (SECURE build / Safety telemetry)
+  input  logic              ecc_cerr,
+  input  logic              ecc_uerr,
+  input  logic [4:0]        ecc_reg,
+  input  logic              glitch_detected,
+  output logic              sec_ct_en_o,
+  output logic              sec_wipe_req_o,
+  output logic              sec_ecc_trap_en_o,
+  output logic              alert_major_o,
+  output logic              alert_minor_o
 );
   // Architectural registers
   logic [XLEN-1:0] mstatus;
@@ -74,6 +85,25 @@ module mist_es_csr
   logic [2:0]      mseccfg;         // ePMP: {RLB[2], MMWP[1], MML[0]}
   integer          jb;              // pmpcfg byte loop index
   wire             rlb = mseccfg[2];
+
+  // ---- security & fault-tolerance registers -------------------------------
+  logic            msec_lock;
+  logic            sec_ct_en_r;
+  logic            sec_ecc_trap_en_r;
+  logic            wipe_pulse;      // 1-cycle wipe request pulse
+  logic [7:0]      cerr_count;      // saturating count of single-bit ECC errors
+  logic            cerr_seen;       // sticky single-bit error seen
+  logic            uerr_seen;       // sticky uncorrectable double-bit error seen
+  logic [4:0]      fault_reg_r;     // register of last ECC fault
+  logic            glitch_seen;     // sticky glitch detected
+  logic            alert_major_r;
+  logic            alert_minor_r;
+
+  assign sec_ct_en_o       = sec_ct_en_r;
+  assign sec_wipe_req_o    = wipe_pulse;
+  assign sec_ecc_trap_en_o = sec_ecc_trap_en_r;
+  assign alert_major_o     = alert_major_r | ecc_uerr | glitch_detected;
+  assign alert_minor_o     = alert_minor_r | ecc_cerr;
 
   // mstatus bit positions we model
   localparam int MIE_BIT  = 3;
@@ -173,6 +203,8 @@ module mist_es_csr
       CSR_MVENDORID: csr_rdata = '0;
       CSR_MARCHID  : csr_rdata = 32'h41535452;   // "ASTR"
       CSR_MHARTID  : csr_rdata = '0;
+      CSR_MSEC_CTRL   : csr_rdata = {27'b0, msec_lock, glitch_seen, sec_ecc_trap_en_r, sec_ct_en_r, 1'b0};
+      CSR_MECC_STATUS : csr_rdata = {17'b0, fault_reg_r, uerr_seen, cerr_seen, cerr_count};
       default      : csr_rdata = '0;
     endcase
   end
@@ -193,9 +225,37 @@ module mist_es_csr
       pmpcfg_r  <= '0;
       pmpaddr_r <= '0;
       mseccfg   <= 3'b0;
+      msec_lock         <= 1'b0;
+      sec_ct_en_r       <= 1'b0;
+      sec_ecc_trap_en_r <= (U_MODE || (PMP_REGIONS > 0)) ? 1'b1 : 1'b0;
+      wipe_pulse  <= 1'b0;
+      cerr_count  <= 8'd0;
+      cerr_seen   <= 1'b0;
+      uerr_seen   <= 1'b0;
+      fault_reg_r <= 5'd0;
+      glitch_seen <= 1'b0;
+      alert_major_r <= 1'b0;
+      alert_minor_r <= 1'b0;
     end else begin
       mcycle <= mcycle + 1'b1;
       if (retire) minstret <= minstret + 1'b1;
+
+      wipe_pulse    <= 1'b0;
+      alert_minor_r <= ecc_cerr;
+      alert_major_r <= ecc_uerr | glitch_detected;
+
+      if (glitch_detected) glitch_seen <= 1'b1;
+
+      if (ecc_cerr) begin
+        cerr_seen <= 1'b1;
+        fault_reg_r <= ecc_reg;
+        if (cerr_count != 8'hFF) cerr_count <= cerr_count + 8'd1;
+      end
+
+      if (ecc_uerr) begin
+        uerr_seen <= 1'b1;
+        fault_reg_r <= ecc_reg;
+      end
 
       if (trap_set) begin
         // Enter trap: save context+priv, disable interrupts, vector to mtvec.
@@ -243,6 +303,20 @@ module mist_es_csr
           // minstret is writable; the write replaces this instruction's increment
           CSR_MINSTRET : minstret <= {minstret_hi, csr_wdata};
           CSR_MINSTRETH: minstret <= {csr_wdata, minstret_lo};
+          CSR_MSEC_CTRL: begin
+            if (!msec_lock) begin
+              if (csr_wdata[0]) wipe_pulse <= 1'b1;
+              sec_ct_en_r       <= csr_wdata[1]; // CT_EN
+              sec_ecc_trap_en_r <= csr_wdata[2]; // ECC_TRAP_EN
+              if (csr_wdata[3]) glitch_seen <= 1'b0; // W1C
+              msec_lock         <= csr_wdata[4]; // LOCK
+            end
+          end
+          CSR_MECC_STATUS: begin
+            cerr_count  <= csr_wdata[7:0];
+            if (csr_wdata[8]) cerr_seen <= 1'b0;
+            if (csr_wdata[9]) uerr_seen <= 1'b0;
+          end
           default      : /* read-only or unimplemented: ignore */ ;
         endcase
       end

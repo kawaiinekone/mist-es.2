@@ -83,6 +83,7 @@ module bench_top
   logic            retire_rd_we;
   logic [4:0]      retire_rd;
   logic            core_mem_req;
+  logic            alert_major_o, alert_minor_o;
   /* verilator lint_on UNUSED */
 
   wire irq_ext_w = msip & mtime[1];
@@ -102,7 +103,8 @@ module bench_top
     .dbg_ar_valid(dbg_ar_valid), .dbg_ar_write(dbg_ar_write),
     .dbg_ar_csr(dbg_ar_csr), .dbg_ar_regno(dbg_ar_regno),
     .dbg_ar_wdata(dbg_ar_wdata), .dbg_ar_rdata(dbg_ar_rdata),
-    .dbg_ar_done(dbg_ar_done)
+    .dbg_ar_done(dbg_ar_done),
+    .alert_major_o(alert_major_o), .alert_minor_o(alert_minor_o)
   );
 
   mist_es_debug u_dbg (

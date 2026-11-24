@@ -16,6 +16,7 @@ module mist_es_muldiv
   input  logic              clk,
   input  logic              rst,
   input  logic              start,
+  input  logic              ct_en,      // Constant-Time execution enable
   input  md_op_e            op,
   input  logic [XLEN-1:0]   a,
   input  logic [XLEN-1:0]   b,
@@ -136,12 +137,12 @@ module mist_es_muldiv
         end
         // ---------------------------------------------------------------
         S_DIV: begin
-          if (div_by_zero) begin
+          if (!ct_en && div_by_zero) begin
             result <= (op_q == MD_DIV)  ? 32'hFFFF_FFFF :
                       (op_q == MD_DIVU) ? 32'hFFFF_FFFF : dividend_raw;
             done   <= 1'b1;
             state  <= S_IDLE;
-          end else if (div_overflow) begin
+          end else if (!ct_en && div_overflow) begin
             result <= (op_q == MD_DIV) ? 32'h8000_0000 : 32'd0;
             done   <= 1'b1;
             state  <= S_IDLE;
@@ -154,12 +155,19 @@ module mist_es_muldiv
         end
         // ---------------------------------------------------------------
         S_FIN: begin
-          unique case (op_q)
-            MD_DIV  : result <= neg_quot ? (~quotient_q + 1'b1) : quotient_q;
-            MD_DIVU : result <= quotient_q;
-            MD_REM  : result <= neg_rem  ? (~rem_lo + 1'b1) : rem_lo;
-            default : result <= rem_lo;        // REMU
-          endcase
+          if (div_by_zero) begin
+            result <= (op_q == MD_DIV)  ? 32'hFFFF_FFFF :
+                      (op_q == MD_DIVU) ? 32'hFFFF_FFFF : dividend_raw;
+          end else if (div_overflow) begin
+            result <= (op_q == MD_DIV) ? 32'h8000_0000 : 32'd0;
+          end else begin
+            unique case (op_q)
+              MD_DIV  : result <= neg_quot ? (~quotient_q + 1'b1) : quotient_q;
+              MD_DIVU : result <= quotient_q;
+              MD_REM  : result <= neg_rem  ? (~rem_lo + 1'b1) : rem_lo;
+              default : result <= rem_lo;        // REMU
+            endcase
+          end
           done  <= 1'b1;
           state <= S_IDLE;
         end

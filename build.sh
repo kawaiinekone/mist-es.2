@@ -2,17 +2,18 @@
 # ============================================================================
 # build.sh — build & run MIST-ES under Icarus Verilog.
 #
-#   ./build.sh [sim|cosim|rvfi|debug|pmp|epmp|upriv|mml|ecc|axil|fpga|bench|clean]
+#   ./build.sh [sim|cosim|rvfi|debug|pmp|epmp|upriv|mml|ecc|security|axil|fpga|bench|clean]
 #
-#   sim    (default) compile the core + SoC and run the self-checking smoke test
-#   cosim  run smoke, then co-simulate against the golden RV32IM ISA model
-#   rvfi   build the RVFI (riscv-formal interface) self-check
-#   debug  build the JTAG / Debug-Module self-check
-#   pmp    build the SECURE config (U-mode + PMP) and run the PMP test program
-#   epmp   as pmp, exercising the ePMP (mseccfg) rules
-#   upriv  SECURE: U-mode access to M-level CSRs and MRET must trap
-#   mml    SECURE: Smepmp mseccfg.MML (machine mode lockdown) rules
-#   ecc    build the register-file SECDED ECC unit test
+#   sim      (default) compile the core + SoC and run the self-checking smoke test
+#   cosim    run smoke, then co-simulate against the golden RV32IM ISA model
+#   rvfi     build the RVFI (riscv-formal interface) self-check
+#   debug    build the JTAG / Debug-Module self-check
+#   pmp      build the SECURE config (U-mode + PMP) and run the PMP test program
+#   epmp     as pmp, exercising the ePMP (mseccfg) rules
+#   upriv    SECURE: U-mode access to M-level CSRs and MRET must trap
+#   mml      SECURE: Smepmp mseccfg.MML (machine mode lockdown) rules
+#   ecc      build the register-file SECDED ECC unit test
+#   security build the hardware security & fault-tolerance verification suite
 #   axil   build the AXI4-Lite master/slave interconnect self-check
 #   fpga   build the FPGA SoC sim (UART banner + LED blink) from firmware.mem
 #   clean  remove build artifacts
@@ -69,6 +70,16 @@ if [[ "$ACTION" == "ecc" ]]; then
     "$C/mist_es_pkg.sv" "$C/mist_es_regfile_ecc.sv" tb/tb_regfile_ecc.sv
   "$VVP" sim/tb_regfile_ecc | tee sim/ecc.log
   check_verdict ecc sim/ecc.log '^ECC: PASS'
+  exit 0
+fi
+
+# ---- hardware security & fault-tolerance suite -----------------------------
+if [[ "$ACTION" == "security" ]]; then
+  echo "Building hardware security & fault-tolerance verification suite..."
+  "$IVL" -g2012 -DMIST_ES_SECURE -I "$C" -I "$R" -o sim/tb_security \
+    $CELLS "$C/mist_es_regfile_ecc.sv" $CORE tb/tb_security.sv
+  "$VVP" sim/tb_security | tee sim/security.log
+  check_verdict security sim/security.log '^  VERDICT: PASS'
   exit 0
 fi
 

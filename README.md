@@ -22,11 +22,12 @@ A compact, fully verified **RV32IMC** processor core in synthesizable SystemVeri
 
 | | |
 | :--- | :--- |
-| **ISA** | `RV32IMC_Zicsr` |
-| **Microarchitecture** | Multi-cycle FSM, non-pipelined, deterministic |
+| **ISA** | `RV32IMCB_Zicsr_Zifencei` |
+| **Microarchitecture** | Multi-cycle FSM, non-pipelined, deterministic, glitch-hardened |
 | **Privilege Modes** | Machine (M); optional User (U) in `SECURE` configuration |
 | **Security & Memory Protection** | 8-region PMP + Smepmp (`mseccfg`: MML, MMWP, RLB) |
-| **Reliability** | SECDED (39, 32) ECC-protected register file (`SECURE` build) |
+| **Reliability & Fault-Tolerance** | SECDED (39, 32) ECC register file with auto-correction, hardware fault trapping, telemetry CSRs (`mecc_status`), and dynamic register zeroization (`msec_ctrl`) |
+| **Physical Attack Hardening** | FSM Glitch Detection & Lockdown (`S_ALERT`), Constant-Time (CT) arithmetic mode, top-level `alert_major_o` / `alert_minor_o` |
 | **Bus Interfaces** | Native memory port + AXI4-Lite master/slave bridge |
 | **Debug** | RISC-V External Debug via JTAG (debug spec 0.13, DTM + DM) |
 | **Arch Compliance** | Official RISC-V Architectural Test Suite (`riscv-arch-test`) + `riscv-tests` |
@@ -37,9 +38,10 @@ A compact, fully verified **RV32IMC** processor core in synthesizable SystemVeri
 ## Features
 
 - **Predictable, Zero-Hazard Execution:** Single instruction walks a short FSM (`FETCH` → `EXEC` → `{LOAD | MD}` → `FETCH`) with zero pipeline hazards and no forwarding complexity
-- **Full Standard Extension Coverage:** Complete support for `I` (base integer), `M` (hardware multiply/divide), `C` (16-bit compressed instructions with transparent decompression), and `Zicsr` (CSR access)
+- **Full Standard Extension Coverage:** Complete support for `I` (base integer), `M` (Radix-4 hardware multiply/divide), `C` (16-bit compressed instructions with transparent decompression), `B` (Zba, Zbb, Zbs bit manipulation), `Zifencei`, and `Zicsr` (CSR access)
 - **Two-Tier Trust Model (`SECURE` Build):** Optional `SECURE` build adds User privilege mode and an 8-region Physical Memory Protection (PMP) unit with **Smepmp** rules: Machine Mode Lockdown (`MML`), Machine Mode Whitelist Policy (`MMWP`), and Rule Locking Bypass (`RLB`)
-- **Register File ECC:** `SECURE` configuration includes a single-error-correct, double-error-detect (**SECDED 39, 32**) Hamming-code protected register file for high-reliability and radiation-tolerant environments
+- **Register File ECC & Dynamic Zeroization:** `SECURE` configuration includes a single-error-correct, double-error-detect (**SECDED 39, 32**) Hamming-code protected register file for high-reliability and radiation-tolerant environments, complete with hardware uncorrectable fault trapping, error counters in `mecc_status`, and hardware dynamic register file zeroization (secure wipe) via `msec_ctrl`
+- **Glitch & Timing Attack Hardening:** FSM fault-injection detection immediately vectors to `S_ALERT` and raises `alert_major_o` on illegal state transitions. Constant-Time (CT) execution mode guarantees operand-independent division latency for side-channel resistant cryptography
 - **Hardware-Resolved Misalignment:** Unaligned loads and stores are handled natively in hardware as two memory beats without raising exceptions
 - **RISC-V External Debug over JTAG:** JTAG Debug Transport Module (DTM) and RISC-V Debug Module (0.13 spec) supporting halt, register/CSR inspection, system-bus memory read/write, resume, and single-step
 - **Dual Bus Interfaces:** Zero-latency native memory port for tightly-coupled memory integration, plus drop-in **AXI4-Lite master/slave** bridge for standard SoC fabrics
@@ -133,6 +135,7 @@ make help         # list all targets
 ./build.sh upriv      # SECURE config: U-mode CSR / MRET privilege checks
 ./build.sh mml        # SECURE config: Smepmp Machine Mode Lockdown rules
 ./build.sh ecc        # Register-file SECDED ECC unit test
+./build.sh security   # Comprehensive hardware security & fault-tolerance suite
 ./build.sh axil       # AXI4-Lite bridge protocol validation
 ./build.sh fpga       # FPGA SoC simulation (UART banner + LED blink)
 ./build.sh clean      # remove build artifacts
@@ -154,6 +157,7 @@ Every action exits non-zero if the testbench reports `FAIL`, `TIMEOUT`, `MISMATC
 | `upriv` | Privilege isolation | Machine CSR & `MRET` access from U-mode raise illegal instruction traps |
 | `mml` | Smepmp lockdown | Machine Mode Lockdown (`mseccfg.MML`) full rule set, pmpcfg and RLB write rules |
 | `ecc` | Register file ECC | SECDED (39, 32) single-bit error auto-correction and double-bit error detection |
+| `security` | Hardware security suite | SECDED fault trapping, MECC telemetry, dynamic register wipe, CT arithmetic, FSM glitch detection |
 | `axil` | AXI4-Lite adapter | Multi-cycle memory to AXI4-Lite protocol conversion with synthetic wait states |
 | `fpga` | FPGA SoC simulation | Full board-level SoC simulation with 115200 baud UART banner transmission and LED blink |
 | `arch` | Architectural tests | Official RISC-V Architectural Test Suite (`riscv-arch-test`) with in-memory signature extraction |

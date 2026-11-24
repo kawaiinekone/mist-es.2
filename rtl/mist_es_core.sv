@@ -57,7 +57,10 @@ module mist_es_core
   input  logic [11:0]       dbg_ar_regno,   // GPR number (0-31) or CSR address
   input  logic [XLEN-1:0]   dbg_ar_wdata,
   output logic [XLEN-1:0]   dbg_ar_rdata,
-  output logic              dbg_ar_done     // 1-cycle completion pulse
+  output logic              dbg_ar_done,    // 1-cycle completion pulse
+  // ---- Security & Safety alert signals -------------------------------------
+  output logic              alert_major_o,
+  output logic              alert_minor_o
 `ifdef RISCV_FORMAL
   ,
   // RISC-V Formal Interface (riscv-formal). Sampled when rvfi_valid=1. Lets the
@@ -94,7 +97,11 @@ module mist_es_core
   localparam logic [3:0] S_LOAD2  = 4'd5;
   localparam logic [3:0] S_STORE2 = 4'd6;
   localparam logic [3:0] S_HALTED = 4'd7;
+  localparam logic [3:0] S_WIPE   = 4'd8;
+  localparam logic [3:0] S_ALERT  = 4'd9;
   logic [3:0] state;
+  logic [4:0] wipe_cnt;
+  wire        glitch_detected = (state > 4'd9);
 
 
   // ---- debug-mode state (RISC-V external debug) ----------------------------
@@ -144,19 +151,18 @@ module mist_es_core
   wire             dbg_do     = dbg_mode && dbg_ar_valid && !dbg_ar_busy;
   wire             dbg_gpr_we = dbg_do && dbg_ar_write && !dbg_ar_csr;
   wire [4:0]       rf_ra1 = (dbg_mode && dbg_ar_valid && !dbg_ar_csr) ? dbg_ar_regno[4:0] : rs1;
-  wire [4:0]       rf_wa  = dbg_gpr_we ? dbg_ar_regno[4:0] : rd;
-  wire [XLEN-1:0]  rf_wd  = dbg_gpr_we ? dbg_ar_wdata     : wb_value;
-  wire             rf_we_eff = dbg_gpr_we | rf_we;
+  wire [4:0]       rf_wa  = (state == S_WIPE) ? wipe_cnt : (dbg_gpr_we ? dbg_ar_regno[4:0] : rd);
+  wire [XLEN-1:0]  rf_wd  = (state == S_WIPE) ? 32'd0    : (dbg_gpr_we ? dbg_ar_wdata     : wb_value);
+  wire             rf_we_eff = (state == S_WIPE) ? 1'b1  : (dbg_gpr_we | rf_we);
   // SECURE builds protect the GPRs with SECDED ECC (single-error-correct,
   // double-error-detect) for register-file hardening.
-  /* verilator lint_off UNUSED */
   wire ecc_cerr, ecc_uerr;
-  /* verilator lint_on UNUSED */
+  wire [4:0] ecc_fault_reg;
   generate if (SECURE) begin : g_rf_ecc
     mist_es_regfile_ecc #(.WRITE_FIRST(0)) u_rf (
       .clk(clk), .ra1(rf_ra1), .ra2(rs2), .rd1(rdata1), .rd2(rdata2),
       .we(rf_we_eff), .wa(rf_wa), .wd(rf_wd),
-      .ecc_cerr(ecc_cerr), .ecc_uerr(ecc_uerr)
+      .ecc_cerr(ecc_cerr), .ecc_uerr(ecc_uerr), .ecc_fault_reg(ecc_fault_reg)
     );
   end else begin : g_rf
     mist_es_regfile #(.WRITE_FIRST(0)) u_rf (
@@ -165,6 +171,7 @@ module mist_es_core
     );
     assign ecc_cerr = 1'b0;
     assign ecc_uerr = 1'b0;
+    assign ecc_fault_reg = 5'd0;
   end endgenerate
 
   // ---- decode (shared base RV32IMC decoder leaf cell) ----------------------
@@ -205,6 +212,7 @@ module mist_es_core
   logic md_done; logic [XLEN-1:0] md_result;
   mist_es_muldiv u_md (
     .clk(clk), .rst(rst), .start(state==S_EXEC && d_is_md),
+    .ct_en(sec_ct_en),
     .op(d_md_op), .a(rdata1), .b(rdata2),
     .busy(md_busy), .done(md_done), .result(md_result)
   );
@@ -266,16 +274,21 @@ module mist_es_core
   wire csr_ro_fault = d_is_csr && csr_do_write && (sys_imm12[11:10] == 2'b11);
   wire illegal_any = d_illegal | priv_fault | csr_ro_fault;
 
-  // trap (priv-aware ecall cause; PMP access faults 1/5/7)
+  // Security signals from CSR file
+  wire sec_ct_en, sec_wipe_req, sec_ecc_trap_en;
+  wire ecc_fault = SECURE && (state == S_EXEC) && ecc_uerr && sec_ecc_trap_en;
+
+  // trap (priv-aware ecall cause; PMP access faults 1/5/7; ECC uncorrectable fault)
   wire ex_trap = (state==S_EXEC) &&
-                 (illegal_any | d_is_ecall | (d_is_ebreak & ~dcsr_ebreakm) | acc_fault);
+                 (illegal_any | d_is_ecall | (d_is_ebreak & ~dcsr_ebreakm) | acc_fault | ecc_fault);
   wire [3:0] ex_cause = acc_fetch_fault ? 4'd1 :                         // instr access
                         illegal_any      ? CAUSE_ILLEGAL :
                         d_is_ecall       ? (cur_priv==2'b00 ? 4'd8 : CAUSE_ECALL_M) :
                         d_is_ebreak      ? CAUSE_BREAKPOINT :
-                        acc_load_fault   ? 4'd5 :                         // load access
+                        (acc_load_fault | ecc_fault) ? 4'd5 :             // load access / ecc fault
                         acc_store_fault  ? 4'd7 : CAUSE_ILLEGAL;          // store access
   wire [XLEN-1:0] ex_tval = acc_fetch_fault               ? pc :
+                            ecc_fault                     ? {27'd0, ecc_fault_reg} :
                             (acc_load_fault|acc_store_fault) ? alu_y :
                             illegal_any                     ? instr : 32'b0;
   logic [XLEN-1:0] mtvec_w, mepc_w;
@@ -327,7 +340,16 @@ module mist_es_core
     .irq_timer(irq_timer), .irq_soft(irq_soft), .irq_ext(irq_ext),
     .mret(commit && d_is_mret && !ex_trap), .retire(commit),
     .mtvec_o(mtvec_w), .mepc_o(mepc_w),
-    .irq_req(irq_req), .irq_cause(irq_cause)
+    .irq_req(irq_req), .irq_cause(irq_cause),
+    .ecc_cerr(ecc_cerr),
+    .ecc_uerr(ecc_uerr),
+    .ecc_reg(ecc_fault_reg),
+    .glitch_detected(glitch_detected),
+    .sec_ct_en_o(sec_ct_en),
+    .sec_wipe_req_o(sec_wipe_req),
+    .sec_ecc_trap_en_o(sec_ecc_trap_en),
+    .alert_major_o(alert_major_o),
+    .alert_minor_o(alert_minor_o)
   );
 
   // ---- debug Access-Register read data + dcsr ------------------------------
@@ -406,6 +428,7 @@ module mist_es_core
   always_ff @(posedge clk) begin
     if (rst) begin
       state <= S_FETCH;
+      wipe_cnt <= 5'd0;
       pc    <= RESET_PC;
       instr <= 32'h0000_0013;
       instr_len <= 3'd4;
@@ -433,7 +456,9 @@ module mist_es_core
 
       unique case (state)
         S_FETCH: if (!mem_stall) begin       // wait for the fetch to be ready
-          if (dbg_haltreq && !dbg_mode) begin           // external halt request
+          if (sec_wipe_req) begin
+            state <= S_WIPE; wipe_cnt <= 5'd1;
+          end else if (dbg_haltreq && !dbg_mode) begin           // external halt request
             dpc <= pc; dcsr_cause <= 3'd3; dbg_mode <= 1'b1; state <= S_HALTED;
           end else if (step_pending && step_seen) begin // single-step complete
             dpc <= pc; dcsr_cause <= 3'd4; dbg_mode <= 1'b1; state <= S_HALTED;
@@ -460,6 +485,11 @@ module mist_es_core
           if      (ebreak_to_debug) begin       // EBREAK with dcsr.ebreakm
             dpc <= pc; dcsr_cause <= 3'd1; dbg_mode <= 1'b1; state <= S_HALTED;
           end
+          else if (sec_wipe_req) begin
+            state <= S_WIPE;
+            wipe_cnt <= 5'd1;
+            pc <= next_pc;
+          end
           else if (d_mem_re && !ex_trap)        state <= S_LOAD;
           else if (d_is_md  && !ex_trap)        state <= S_MD;
           else if (d_mem_we && !ex_trap && mis) begin
@@ -481,7 +511,14 @@ module mist_es_core
           dbg_mode <= 1'b0; pc <= dpc; state <= S_FETCH;
           step_pending <= dcsr_step; step_seen <= 1'b0;
         end
-        default: state <= S_FETCH;
+        S_WIPE: begin
+          if (wipe_cnt == 5'd31) state <= S_FETCH;
+          else wipe_cnt <= wipe_cnt + 5'd1;
+        end
+        S_ALERT: begin
+          state <= S_ALERT;
+        end
+        default: state <= S_ALERT;
       endcase
     end
   end

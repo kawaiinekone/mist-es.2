@@ -36,7 +36,9 @@ module mist_es_soc
   output logic [XLEN-1:0]   retire_instr,
   output logic              retire_rd_we,
   output logic [4:0]        retire_rd,
-  output logic [XLEN-1:0]   retire_rd_val
+  output logic [XLEN-1:0]   retire_rd_val,
+  output logic              alert_major_o,
+  output logic              alert_minor_o
 );
   logic [XLEN-1:0] imem [0:IMEM_WORDS-1];
   logic [XLEN-1:0] dram [0:DRAM_WORDS-1];
@@ -82,7 +84,8 @@ module mist_es_soc
     .dbg_haltreq(dbg_haltreq), .dbg_resumereq(dbg_resumereq), .dbg_halted(dbg_halted),
     .dbg_ar_valid(dbg_ar_valid), .dbg_ar_write(dbg_ar_write), .dbg_ar_csr(dbg_ar_csr),
     .dbg_ar_regno(dbg_ar_regno), .dbg_ar_wdata(dbg_ar_wdata),
-    .dbg_ar_rdata(dbg_ar_rdata), .dbg_ar_done(dbg_ar_done)
+    .dbg_ar_rdata(dbg_ar_rdata), .dbg_ar_done(dbg_ar_done),
+    .alert_major_o(alert_major_o), .alert_minor_o(alert_minor_o)
   );
 
   mist_es_debug u_dbg (

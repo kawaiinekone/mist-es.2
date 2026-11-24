@@ -46,7 +46,8 @@ module tb_mist_es;
     .tohost(tohost), .tohost_we(tohost_we),
     .retire_valid(retire_valid), .retire_pc(retire_pc),
     .retire_instr(retire_instr), .retire_rd_we(retire_rd_we),
-    .retire_rd(retire_rd), .retire_rd_val(retire_rd_val)
+    .retire_rd(retire_rd), .retire_rd_val(retire_rd_val),
+    .alert_major_o(), .alert_minor_o()
   );
 
   string imem_file, dram_file;
