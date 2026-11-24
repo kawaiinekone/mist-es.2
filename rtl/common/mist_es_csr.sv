@@ -196,10 +196,10 @@ module mist_es_csr
       CSR_MCYCLEH  : csr_rdata = mcycle_hi;
       CSR_MINSTRET : csr_rdata = minstret_lo;
       CSR_MINSTRETH: csr_rdata = minstret_hi;
-      12'hC00      : csr_rdata = mcycle_lo;    // cycle   (user-mode alias)
-      12'hC80      : csr_rdata = mcycle_hi;    // cycleh  (user-mode alias)
-      12'hC02      : csr_rdata = minstret_lo;  // instret (user-mode alias)
-      12'hC82      : csr_rdata = minstret_hi;  // instreth (user-mode alias)
+      CSR_CYCLE    : csr_rdata = mcycle_lo;    // cycle   (user-mode alias)
+      CSR_CYCLEH   : csr_rdata = mcycle_hi;    // cycleh  (user-mode alias)
+      CSR_INSTRET  : csr_rdata = minstret_lo;  // instret (user-mode alias)
+      CSR_INSTRETH : csr_rdata = minstret_hi;  // instreth (user-mode alias)
       CSR_MVENDORID: csr_rdata = '0;
       CSR_MARCHID  : csr_rdata = 32'h41535452;   // "ASTR"
       CSR_MHARTID  : csr_rdata = '0;

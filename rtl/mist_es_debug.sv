@@ -147,6 +147,7 @@ module mist_es_debug #(
       IR_IDCODE: tdo = dr[0];
       IR_DTMCS : tdo = dr[0];
       IR_DMI   : tdo = dr[0];
+      IR_BYPASS: tdo = bypass_bit;
       default  : tdo = bypass_bit;     // BYPASS
     endcase
   end
@@ -219,7 +220,7 @@ module mist_es_debug #(
   // ==========================================================================
   // 6. Abstract-command + System-Bus engine (clk domain)
   // ==========================================================================
-  localparam [2:0] E_IDLE=0, E_AR=1, E_AR_WAIT=2, E_SB_RD=3, E_SB_WR=4, E_SB_WAIT=5;
+  localparam [2:0] E_IDLE=0, E_AR_WAIT=2, E_SB_RD=3, E_SB_WR=4;
   reg [2:0] eng;
 
   // a pending DMI write request from UPDATE_DR (1-cycle pulse)

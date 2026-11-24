@@ -322,7 +322,7 @@ module mist_es_core
   wire        csr_we_eff    = dbg_mode ? dbg_csr_we   : (commit && csr_do_write && !ex_trap);
   wire [XLEN-1:0] csr_wdata_eff = dbg_mode ? dbg_ar_wdata : csr_wval;
 
-  mist_es_csr #(.MISA_VAL((32'b01<<30)|(1<<8)|(1<<12)|(1<<2)|(1<<1)),  // RV32IMCB
+  mist_es_csr #(.MISA_VAL((32'b01<<30)|(1<<8)|(1<<12)|(1<<2)),  // RV32IMC
                 .U_MODE(SECURE), .PMP_REGIONS(SECURE ? NPMP : 0)) u_csr (  // secure opt
     .clk(clk), .rst(rst),
     .csr_addr(csr_addr_eff), .csr_rdata(csr_rdata),

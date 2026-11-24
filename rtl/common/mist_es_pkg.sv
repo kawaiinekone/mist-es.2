@@ -10,6 +10,8 @@
 
 package mist_es_pkg;
 
+  /* verilator lint_off UNUSEDPARAM */
+
   // ---- Word geometry -------------------------------------------------------
   localparam bit [31:0] XLEN = 32;
 
@@ -88,10 +90,13 @@ package mist_es_pkg;
   localparam logic [11:0] CSR_CYCLE    = 12'hC00;
   localparam logic [11:0] CSR_CYCLEH   = 12'hC80;
   localparam logic [11:0] CSR_INSTRET  = 12'hC02;
+  localparam logic [11:0] CSR_INSTRETH = 12'hC82;
 
   // Security & Fault-Tolerance Custom Machine-Mode CSRs (Standard RISC-V 0x7C0-0x7FF)
   localparam logic [11:0] CSR_MSEC_CTRL   = 12'h7C0; // Security control: [0]=WIPE, [1]=CT_EN, [2]=ECC_TRAP_EN, [3]=GLITCH_SEEN, [4]=LOCK
   localparam logic [11:0] CSR_MECC_STATUS = 12'h7C1; // ECC status: [7:0]=CERR_COUNT, [8]=CERR_SEEN, [9]=UERR_SEEN, [14:10]=FAULT_REG
+
+  /* verilator lint_on UNUSEDPARAM */
 
 endpackage : mist_es_pkg
 
