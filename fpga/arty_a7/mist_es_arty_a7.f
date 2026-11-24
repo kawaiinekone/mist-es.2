@@ -4,6 +4,7 @@
 ../../rtl/common/mist_es_pkg.sv
 ../../rtl/common/mist_es_alu.sv
 ../../rtl/common/mist_es_regfile.sv
+../../rtl/common/mist_es_regfile_ecc.sv
 ../../rtl/common/mist_es_muldiv.sv
 ../../rtl/common/mist_es_csr.sv
 ../../rtl/common/mist_es_rvc.sv
