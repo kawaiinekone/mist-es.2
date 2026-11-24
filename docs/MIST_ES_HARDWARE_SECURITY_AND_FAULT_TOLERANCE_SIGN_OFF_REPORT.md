@@ -72,7 +72,7 @@ Defined in standard RISC-V Custom Machine-Mode space (`0x7C0 - 0x7FF`):
 | **Golden Co-Simulation** | `./build.sh cosim` | **PASS** | 142/142 retire instructions identical to golden reference |
 | **Constrained-Random** | `./build.sh random 1500` | **PASS** | 1,707/1,707 retired instructions match Python golden model |
 | **Official RISC-V Tests** | `./run_isa.sh secure` | **PASS** | **67 / 67 Passed (100.0%)** (rv32ui, rv32um, rv32uc, rv32mi) |
-| **Hardware Code Coverage**| `./build.sh coverage` | **PASS** | **89.33% RTL line coverage** across full datapath and core |
+| **Hardware Code Coverage**| `./build.sh coverage` | **PASS** | **95.21% RTL line coverage** (1,213 / 1,274 lines across full datapath & core; leaf execution units hit $\ge 95.5\%–100\%$) |
 
 ---
 

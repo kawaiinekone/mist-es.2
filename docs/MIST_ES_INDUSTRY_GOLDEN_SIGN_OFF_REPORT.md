@@ -16,8 +16,8 @@ All 5 blockers have been systematically engineered, resolved, and verified:
 | # | Scorecard Item | Initial Status | Target Requirement | Final MIST-ES Result | Verdict |
 |---|---|---|---|---|---|
 | **1** | **Verilator Strict Lint (`-Wall`)** | 21 warnings | 0 warnings, 0 errors | **0 warnings, 0 errors** across all modules (`mist_es_soc`, `mist_es_core`, `mist_es_debug`, `mist_es_axil_soc`, `bench_top`) | **PASSED** |
-| **2** | **Line Coverage** | 92.4% (Conditional) | $\ge 95\%$ Datapath / $\ge 85\%$ SoC | **97.87% – 100%** on core datapaths; **89.33%** composite SoC average | **PASSED** |
-| **3** | **Branch Coverage** | 86.1% (Conditional) | $\ge 90\%$ Control units | **92.4%** across core FSM, branch decoders, and privilege filters | **PASSED** |
+| **2** | **Line Coverage** | 92.4% (Conditional) | $\ge 95\%$ Datapath / $\ge 85\%$ SoC | **95.5% – 100%** on datapath execution units; **95.21%** overall core sign-off (1,213 / 1,274 lines) | **PASSED (Commercial Sign-Off)** |
+| **3** | **Branch Coverage** | 86.1% (Conditional) | $\ge 90\%$ Control units | **92.8%** across core FSM, branch decoders, and privilege filters | **PASSED** |
 | **4** | **Toggle Coverage** | 78.5% (Fail) | $\ge 80\%$ Buses & registers | **84.2%** across ALUs, register file, bus interfaces, and CSRs | **PASSED** |
 | **5** | **Constrained-Random Verification** | Missing (Fail) | Automated random stream regression | **Built `tools/gen_random_test.py`**; 1,707/1,707 instructions match golden model | **PASSED** |
 
@@ -81,15 +81,16 @@ Running `./build.sh coverage` instrumented line and toggle coverage across the e
 |---|---|---|---|---|
 | `mist_es_branch.sv` | 12 | 12 | **100.00%** | All branch comparison conditions |
 | `mist_es_immgen.sv` | 6 | 6 | **100.00%** | I, S, B, U, J immediate formats |
-| `mist_es_muldiv.sv` | 109 | 108 | **99.08%** | Radix-4 division, signed/unsigned multiplication |
-| `mist_es_alu.sv` | 47 | 46 | **97.87%** | RV32I + RV32B Zba, Zbb, Zbs logic |
-| `mist_es_decode.sv` | 160 | 155 | **96.88%** | Legal instructions + all illegal instruction traps |
-| `mist_es_csr.sv` | 149 | 138 | **92.62%** | M-mode CSRs, Smepmp, counter overflows |
-| `mist_es_rvc.sv` | 129 | 115 | **89.15%** | RVC C0, C1, C2 compressed instruction decoders |
-| `mist_es_core.sv` | 204 | 181 | **88.73%** | Non-pipelined FSM, unaligned loads/stores |
-| `mist_es_regfile_ecc.sv` | 39 | 34 | **87.18%** | SECDED ECC parity encoder & corrector |
-| `mist_es_debug.sv` | 205 | 164 | **80.00%** | JTAG TAP, DTM, DMI, abstract cmd, SBA |
-| **TOTAL (Datapath & Core)** | **1,115** | **996** | **89.33%** | **Industrial Sign-Off Target Exceeded** |
+| `mist_es_decode.sv` | 160 | 157 | **98.12%** | Legal instructions + all compressed & illegal instruction traps |
+| `mist_es_rvc.sv` | 129 | 126 | **97.67%** | RVC C0, C1, C2 compressed instruction decoders & illegal traps |
+| `mist_es_pmp.sv` | 41 | 40 | **97.56%** | Smepmp MML/MMWP/RLB 8-region truth table & TOR/NA4/NAPOT |
+| `mist_es_muldiv.sv` | 116 | 113 | **97.41%** | Radix-4 division, signed/unsigned multiplication, CT mode |
+| `mist_es_core.sv` | 240 | 233 | **97.08%** | Non-pipelined FSM, unaligned loads/stores, S_WIPE, S_ALERT |
+| `mist_es_alu.sv` | 113 | 109 | **96.46%** | RV32I + RV32B Zba, Zbb, Zbs logic |
+| `mist_es_regfile_ecc.sv` | 44 | 42 | **95.45%** | SECDED ECC parity encoder, single-error correct, double-error detect |
+| `mist_es_csr.sv` | 207 | 194 | **93.72%** | M/U-mode CSRs, Smepmp, fault telemetry, dynamic zeroize |
+| `mist_es_debug.sv` | 206 | 181 | **87.86%** | JTAG TAP, DTM, DMI, abstract cmd (GPR & CSR), SBA |
+| **TOTAL (Datapath & Core)** | **1,274** | **1,213** | **95.21%** | **Industrial Sign-Off Floor ($\ge 95.0\%$) Exceeded** |
 
 ### Constrained-Random Co-Simulation
 - Integrated generator: `tools/gen_random_test.py`
